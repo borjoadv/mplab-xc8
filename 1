@@ -1,0 +1,79 @@
+#include <xc.h>
+#include <string.h>
+ 
+__PROG_CONFIG(1, 0x3FE4);    
+__PROG_CONFIG(2, 0x1EFF);    
+ 
+void init_uart(void);
+void uart_print(const char *str);
+ 
+void main(void)
+{
+    init_uart(); 
+
+    char tasta1, tasta2;
+    int val1, val2, rezultat;
+
+    while(1) 
+    {
+        
+        uart_print("\r\nIntroduceti A: ");
+        while(!RCIF);
+        if(OERR) { CREN = 0; CREN = 1; }
+        tasta1 = RCREG;
+        
+        while(!TXIF); TXREG = tasta1;
+        val1 = tasta1 - '0';          
+
+       
+        uart_print("\r\nIntroduceti B: ");
+        while(!RCIF);
+        if(OERR) { CREN = 0; CREN = 1; }
+        tasta2 = RCREG;
+        
+        while(!TXIF); TXREG = tasta2; 
+        val2 = tasta2 - '0';          
+
+        
+        rezultat = val1 * val2;
+        
+        uart_print("\r\nProdusul = ");
+
+        if (rezultat >= 10) 
+        {
+            
+            while(!TXIF); 
+            TXREG = (rezultat / 10) + '0'; 
+        }
+        
+        
+        while(!TXIF); 
+        TXREG = (rezultat % 10) + '0'; 
+        
+        uart_print("\r\n----------------");
+    }
+}
+ 
+void init_uart(void)
+{
+    OSCCON = 0x73;      
+ 
+    TRISC = 0b10000000; 
+    PORTC = 0x00;       
+ 
+    BAUDCON = 0b00001000;
+    SPBRGH  = 0;
+    SPBRGL  = 207;
+    TXSTA   = 0b00100100;
+    RCSTA   = 0b10010000;         
+}
+ 
+void uart_print(const char *str)
+{
+    while(*str != '\0')
+    {
+        while(!TXIF);   
+        TXREG = *str;
+        str++;
+    }
+}
