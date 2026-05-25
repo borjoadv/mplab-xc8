@@ -1,0 +1,132 @@
+#include <xc.h>
+ 
+#define _XTAL_FREQ 8000000
+ 
+__PROG_CONFIG(1, 0x3FE4);    
+__PROG_CONFIG(2, 0x1EFF);    
+ 
+unsigned char a = 0;
+unsigned char cifra0, cifra1, cifra2;
+unsigned char cifra[10] = {0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8, 0x80, 0x90};
+unsigned char digit[5] = {0xFE, 0xFD, 0xFB, 0xF7, 0xFF};
+ 
+unsigned int rezultat_adc;
+unsigned long tensiune;
+ 
+void init(void);
+unsigned int read_adc(void);
+ 
+void main(void)
+{
+    init();
+ 
+    while(1)
+    {
+        rezultat_adc = read_adc();
+        tensiune = ((unsigned long)rezultat_adc * 520) / 1023;
+ 
+        if(!RD2)
+        {
+            cifra0 = tensiune / 100;
+            cifra1 = (tensiune / 10) % 10;
+            cifra2 = tensiune % 10;
+        }
+        else
+        {
+            unsigned int intreg = tensiune / 10;
+            cifra0 = intreg / 10;
+            cifra1 = intreg % 10;
+            cifra2 = 10; 
+        }
+ 
+        __delay_ms(100);
+    }
+}
+ 
+void init(void)
+{
+    OSCCON = 0x73;
+ 
+    ANSELA = 0x01;
+    TRISA = 0x01;
+    PORTA = 0xFF;
+ 
+    ANSELB = 0x00;
+    TRISB = 0x00;
+    PORTB = 0xFF;
+ 
+    ANSELD = 0x00;
+    TRISD = 0xFF;
+ 
+    ADCON1 = 0x90;
+    ADCON0 = 0x01;
+ 
+    T1CON = 0x11;
+    TMR1IE = 1;
+    PEIE = 1;
+    GIE = 1;
+}
+ 
+unsigned int read_adc(void)
+{
+    GO_DONE = 1;
+    while(GO_DONE);
+    return ((ADRESH << 8) + ADRESL);
+}
+ 
+void interrupt ia2(void)
+{
+    if(TMR1IF)
+    {
+        TMR1IF = 0;
+        TMR1H = 0xF6;
+        TMR1L = 0x3B;
+ 
+        switch(a++)
+        {
+            case 0:
+                PORTA = digit[4];
+                if(!RD2)
+                {
+                    PORTB = cifra[cifra0];
+                }
+                else
+                {
+                    if(cifra0 == 0) PORTB = 0xFF;
+                    else PORTB = cifra[cifra0];
+                }
+                PORTA = digit[0];
+                break;
+ 
+            case 1:
+                PORTA = digit[4];
+                if(!RD2)
+                {
+                    PORTB = cifra[cifra1] & 0x7F;
+                }
+                else
+                {
+                    PORTB = cifra[cifra1];
+                }
+                PORTA = digit[1];
+                break;
+ 
+            case 2:
+                PORTA = digit[4];
+                if(cifra2 == 10)
+                {
+                    PORTB = 0xFF;
+                }
+                else
+                {
+                    PORTB = cifra[cifra2];
+                }
+                PORTA = digit[2];
+                a = 0;
+                break;
+ 
+            default:
+                break;
+        }
+    }
+}
