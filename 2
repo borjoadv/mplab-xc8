@@ -1,0 +1,165 @@
+#include <xc.h>
+
+#define _XTAL_FREQ 8000000
+
+__PROG_CONFIG(1, 0x3FE4);    
+__PROG_CONFIG(2, 0x1EFF);    
+
+const unsigned char CH_HEX[10] = {0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8, 0x80, 0x90};
+const unsigned char SEL_DIGIT[5] = {0xFE, 0xFD, 0xFB, 0xF7, 0xFF};
+
+unsigned int contor_timp = 0;
+unsigned char index_multiplexare = 0;
+unsigned char flag_activ = 0;
+unsigned char ecran_memorie = 0;
+
+unsigned char sec_zeci = 0;
+unsigned char sec_unitati = 0;
+
+unsigned char mem_zeci = 0;
+unsigned char mem_unitati = 0;
+
+void inituc(void);
+
+void main(void)
+{
+    inituc();
+
+    while(1)
+    {
+        if(RA1 == 0)
+        {
+            __delay_ms(200);
+            flag_activ = 1;
+        }
+
+        if(RA2 == 0)
+        {
+            __delay_ms(200);
+            flag_activ = 0;
+        }
+
+        if(RA3 == 0)
+        {
+            __delay_ms(200);
+            if(flag_activ == 1)
+            {
+                mem_zeci = sec_zeci;
+                mem_unitati = sec_unitati;
+            }
+            else
+            {
+                ecran_memorie = (ecran_memorie == 0) ? 1 : 0;
+                RA0 = (ecran_memorie == 1) ? 1 : 0;
+            }
+        }
+
+        if(RD2 == 0)
+        {
+            __delay_ms(200);
+            sec_unitati = 0;
+            sec_zeci = 0;
+            mem_unitati = 0;
+            mem_zeci = 0;
+            ecran_memorie = 0;
+            RA0 = 0;
+            flag_activ = 0;
+        }
+
+        if(flag_activ && (contor_timp >= 40))
+        {
+            contor_timp = 0;
+            sec_unitati++;
+            
+            if(sec_unitati > 9)
+            {
+                sec_unitati = 0;
+                sec_zeci++;
+                if(sec_zeci > 9)
+                {
+                    sec_zeci = 0;
+                }
+            }
+        }
+    }
+}
+
+void inituc(void)
+{
+    OSCCON = 0x73;
+
+    ANSELA = 0x00;
+    TRISA = 0x0E;  
+    PORTA = 0xFF;
+
+    ANSELB = 0x00;
+    TRISB = 0x00;  
+    PORTB = 0xFF;
+
+    ANSELD = 0x00;
+    TRISD = 0xFF;  
+
+    T1CON = 0x11;
+    TMR1IE = 1;
+    PEIE = 1;
+    GIE = 1;
+}
+
+void __interrupt() multiplexare_afisaj(void)
+{
+    if(TMR1IF)
+    {
+        TMR1IF = 0;
+        TMR1H = 0xF6;
+        TMR1L = 0x3B;
+
+        if(flag_activ)
+        {
+            contor_timp++;
+        }
+
+        unsigned char afis_zeci = sec_zeci;
+        unsigned char afis_unitati = sec_unitati;
+
+        if((ecran_memorie == 1) && (flag_activ == 0))
+        {
+            afis_zeci = mem_zeci;
+            afis_unitati = mem_unitati;
+        }
+
+        switch(index_multiplexare)
+        {
+            case 0:
+                PORTA = SEL_DIGIT[4]; 
+                PORTB = CH_HEX[afis_zeci] & 0x7F; 
+                PORTA = SEL_DIGIT[0]; 
+                index_multiplexare = 1;
+                break;
+                
+            case 1:
+                PORTA = SEL_DIGIT[4];
+                PORTB = CH_HEX[afis_unitati]; 
+                PORTA = SEL_DIGIT[1]; 
+                index_multiplexare = 2;
+                break;
+                
+            case 2:
+                PORTA = SEL_DIGIT[4];
+                PORTB = 0xFF; 
+                PORTA = SEL_DIGIT[2]; 
+                index_multiplexare = 3;
+                break;
+                
+            case 3:
+                PORTA = SEL_DIGIT[4];
+                PORTB = 0xFF; 
+                PORTA = SEL_DIGIT[3]; 
+                index_multiplexare = 0;
+                break;
+                
+            default:
+                index_multiplexare = 0;
+                break;
+        }
+    }
+}
